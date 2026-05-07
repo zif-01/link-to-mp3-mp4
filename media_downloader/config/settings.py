@@ -1,22 +1,22 @@
 """
-Файл конфигурации приложения
+Настройки приложения.
 """
-import os
 
-# Базовые настройки приложения
-APP_NAME = "Загрузчик медиафайлов"
-APP_VERSION = "1.0.0"
+__all__ = [
+    'APP_NAME',
+    'APP_VERSION',
+    'YTDLP_DEFAULT_OPTS',
+    'DEFAULT_DOWNLOAD_DIR',
+]
 
-# Настройки yt-dlp
-YTDLP_DEFAULT_OPTS = {
+
+APP_NAME: str = "Загрузчик медиафайлов"
+APP_VERSION: str = "1.0.0"
+
+YTDLP_DEFAULT_OPTS: dict = {
     'quiet': True,
     'no_warnings': True,
     'format': 'best[ext=mp4]/best',
 }
 
-# Настройки GUI
-WINDOW_WIDTH = 600
-WINDOW_HEIGHT = 400
-
-# Директории
-DEFAULT_DOWNLOAD_DIR = os.path.expanduser("~\\Downloads")
+DEFAULT_DOWNLOAD_DIR: str = None  # Определяется динамически

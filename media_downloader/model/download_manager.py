@@ -1,44 +1,42 @@
 """
-Менеджер загрузки медиафайлов с использованием yt-dlp
+Менеджер загрузки медиафайлов с использованием yt-dlp.
 """
-import yt_dlp
+
+__all__ = ['DownloadManager']
+
 import os
+import urllib.parse
 import threading
-from typing import Callable, Optional
+from typing import Optional, Callable
 from ..model.download_model import DownloadModel
 
 
 class DownloadManager:
-    """
-    Менеджер для загрузки медиафайлов через yt-dlp
-    """
+    """Отвечает за процессы загрузки и отмены."""
 
-    def __init__(self):
-        """
-        Инициализация менеджера загрузки
-        """
-        self.ydl_opts = {}
-        self.current_download_thread = None
-        self.is_cancelled = False
+    def __init__(self) -> None:
+        """Инициализация менеджера."""
+        self.ydl_opts: dict = {}
+        self.current_download_thread: Optional[threading.Thread] = None
+        self.is_cancelled: bool = False
 
     def configure_download(self, model: DownloadModel) -> dict:
         """
-        Конфигурация параметров yt-dlp на основе модели
+        Конфигурация опций для yt-dlp.
 
         Args:
-            model (DownloadModel): Модель данных загрузки
+            model: Модель с данными о загрузке
 
         Returns:
-            dict: Параметры для yt-dlp
+            Словарь опций yt-dlp
         """
-        # Базовые параметры
-        ydl_opts = {
-            'outtmpl': os.path.join(model.save_directory, '%(title)s.%(ext)s'),
+        ydl_opts: dict = {
+            'outtmpl': os.path.join(
+                model.save_directory, '%(title)s.%(ext)s'),
             'progress_hooks': [self._progress_hook],
             'logger': self._Logger(),
         }
 
-        # Настройка параметров в зависимости от формата
         if model.format_type == 'mp3':
             ydl_opts.update({
                 'format': 'bestaudio/best',
@@ -55,33 +53,32 @@ class DownloadManager:
 
         return ydl_opts
 
-    def download_media(self, model: DownloadModel, progress_callback: Optional[Callable] = None) -> bool:
+    def download_media(
+        self,
+        model: DownloadModel,
+        progress_callback: Optional[Callable] = None
+    ) -> bool:
         """
-        Загрузка медиафайла в отдельном потоке
+        Запускает загрузку медиафайла.
 
         Args:
-            model (DownloadModel): Модель данных загрузки
-            progress_callback (Callable, optional): Функция обратного вызова для прогресса
+            model: Модель с данными о загрузке
+            progress_callback: Обратный вызов для обновления прогресса
 
         Returns:
-            bool: True если загрузка успешна, False в случае ошибки
+            True если загрузка началась
         """
         self.is_cancelled = False
         model.update_status("downloading")
 
-        def download_thread():
+        def download_thread() -> None:
             try:
                 ydl_opts = self.configure_download(model)
 
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    # Сохраняем callback для использования в progress_hook
-                    self._progress_callback = progress_callback
-
-                    # Получаем информацию о видео
                     info = ydl.extract_info(model.url, download=False)
                     model.filename = info.get('title', 'unknown')
 
-                    # Загружаем видео
                     if not self.is_cancelled:
                         ydl.download([model.url])
 
@@ -97,45 +94,43 @@ class DownloadManager:
                     model.filename = str(e)
                     if progress_callback:
                         progress_callback(model)
-                return False
+                return
 
-            return True
-
-        # Запуск загрузки в отдельном потоке
-        self.current_download_thread = threading.Thread(target=download_thread, daemon=True)
+        self.current_download_thread = threading.Thread(
+            target=download_thread,
+            daemon=True
+        )
         self.current_download_thread.start()
         return True
 
-    def cancel_download(self):
-        """
-        Отмена текущей загрузки
-        """
+    def cancel_download(self) -> None:
+        """Отменяет текущую загрузку."""
         self.is_cancelled = True
         if self.current_download_thread and self.current_download_thread.is_alive():
-            # Примечание: мягкая отмена, так как мы не можем принудительно остановить yt-dlp
-            pass
+            self.current_download_thread.join()
 
-    def _progress_hook(self, data):
+    def _progress_hook(self, data: dict) -> None:
         """
-        Обработчик прогресса от yt-dlp
+        Обратный вызов для обновления прогресса.
 
         Args:
-            data (dict): Данные о прогрессе загрузки
+            data: Данные о прогрессе
         """
         if self.is_cancelled:
             raise yt_dlp.DownloadCancelled("Download was cancelled")
 
-        if data['status'] == 'downloading' and hasattr(self, '_progress_callback'):
+        if (
+            data['status'] == 'downloading'
+            and hasattr(self, '_progress_callback')
+        ):
             progress_str = data.get('_percent_str', '0%')
-            # Извлечение числового значения из строки прогресса
+
             try:
                 progress = float(progress_str.replace('%', '').strip())
             except ValueError:
                 progress = 0
 
-            # Обновляем модель через callback если он есть
             if self._progress_callback:
-                # Передаем данные прогресса в callback
                 progress_data = {
                     'progress': progress,
                     'speed': data.get('_speed_str', ''),
@@ -144,14 +139,13 @@ class DownloadManager:
                 self._progress_callback(progress_data)
 
     class _Logger:
-        """
-        Внутренний класс для логирования yt-dlp
-        """
-        def debug(self, msg):
+        """Молчаливый логгер для yt-dlp."""
+
+        def debug(self, msg: str) -> None:
             pass
 
-        def warning(self, msg):
+        def warning(self, msg: str) -> None:
             pass
 
-        def error(self, msg):
+        def error(self, msg: str) -> None:
             print(f"Ошибка yt-dlp: {msg}")

@@ -1,52 +1,108 @@
-"""
-Главное окно приложения с графическим интерфейсом
-"""
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import threading
 from typing import TYPE_CHECKING
 import os
+from media_downloader.utils.preference_manager import PreferenceManager
 
 if TYPE_CHECKING:
     from media_downloader.controller.app_controller import AppController
     from media_downloader.model.download_model import DownloadModel
 
 
+class EntryWithContextMenu(ttk.Entry):
+
+
+    def __init__(self, parent, *args, **kwargs):
+        super().__init__(parent, *args, **kwargs)
+        self._create_context_menu()
+        self._bind_events()
+
+    def _create_context_menu(self):
+        self.context_menu = tk.Menu(self, tearoff=0)
+        self.context_menu.add_command(label="Вырезать", command=self._cut)
+        self.context_menu.add_command(label="Копировать", command=self._copy)
+        self.context_menu.add_separator()
+        self.context_menu.add_command(label="Вставить", command=self._paste)
+
+    def _bind_events(self):
+        self.bind("<Button-3>", self._show_context_menu)  
+        self.bind("<Button-2>", self._show_context_menu)  
+
+        self.bind("<KeyPress>", self._handle_key_press)
+
+        self.bind("<Control-a>", self._select_all)
+        self.bind("<Alt-a>", self._select_all)
+        self.bind("<Shift-Home>", self._select_to_home)
+        self.bind("<Shift-End>", self._select_to_end)
+
+    def _handle_key_press(self, event):
+        ctrl = (event.state & 0x4) != 0
+
+        if event.keycode == 86 and ctrl:
+            self._paste()
+            return "break"
+        elif event.keycode == 67 and ctrl:
+            self._copy()
+            return "break"
+        elif event.keycode == 88 and ctrl:
+            self._cut()
+            return "break"
+
+    def _show_context_menu(self, event):
+        try:
+            self.context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.context_menu.grab_release()
+
+    def _cut(self):
+        self.event_generate("<<Cut>>")
+
+    def _copy(self):
+        self.event_generate("<<Copy>>")
+
+    def _paste(self):
+        self.event_generate("<<Paste>>")
+
+    def _select_all(self, event):
+        self.select_range(0, tk.END)
+        return "break"
+
+    def _select_to_home(self, event):
+        try:
+            current_pos = self.index(tk.INSERT)
+            self.select_range(0, current_pos)
+        except tk.TclError:
+            pass
+        return "break"
+
+    def _select_to_end(self, event):
+        try:
+            current_pos = self.index(tk.INSERT)
+            self.select_range(current_pos, tk.END)
+        except tk.TclError:
+            pass
+        return "break"
+
+
 class MainWindow(tk.Tk):
-    """
-    Главное окно приложения для скачивания медиафайлов
-    """
 
     def __init__(self, controller: 'AppController'):
-        """
-        Инициализация главного окна
-
-        Args:
-            controller (AppController): Контроллер приложения
-        """
         super().__init__()
         self.controller = controller
 
-        # Настройка окна
-        self.title("Загрузчик медиафайлов")
         self.geometry("600x400")
         self.resizable(True, True)
 
-        # Переменные для хранения значений
         self.url_var = tk.StringVar()
         self.format_var = tk.StringVar(value="mp4")
         self.directory_var = tk.StringVar()
 
-        # Создание виджетов
         self.create_widgets()
 
-        # Центрирование окна
         self.center_window()
 
     def center_window(self):
-        """
-        Центрирование окна на экране
-        """
         self.update_idletasks()
         width = self.winfo_width()
         height = self.winfo_height()
@@ -55,28 +111,22 @@ class MainWindow(tk.Tk):
         self.geometry(f'{width}x{height}+{x}+{y}')
 
     def create_widgets(self):
-        """
-        Создание всех виджетов окна
-        """
-        # Создание основного фрейма
+        self.pref_manager = PreferenceManager()
+
         main_frame = ttk.Frame(self, padding="10")
         main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
-        # Настройка сетки
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
 
-        # Заголовок
         title_label = ttk.Label(main_frame, text="Загрузчик медиафайлов", font=('Arial', 16, 'bold'))
         title_label.grid(row=0, column=0, columnspan=3, pady=(0, 20))
 
-        # Поле ввода URL
         ttk.Label(main_frame, text="URL видео:").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.url_entry = ttk.Entry(main_frame, textvariable=self.url_var, width=50)
+        self.url_entry = EntryWithContextMenu(main_frame, textvariable=self.url_var, width=50)
         self.url_entry.grid(row=1, column=1, columnspan=2, sticky=(tk.W, tk.E), pady=5, padx=(0, 10))
 
-        # Выбор формата
         ttk.Label(main_frame, text="Формат:").grid(row=2, column=0, sticky=tk.W, pady=5)
         format_frame = ttk.Frame(main_frame)
         format_frame.grid(row=2, column=1, sticky=tk.W, pady=5)
@@ -84,28 +134,32 @@ class MainWindow(tk.Tk):
         ttk.Radiobutton(format_frame, text="MP4 (Видео)", variable=self.format_var, value="mp4").pack(side=tk.LEFT)
         ttk.Radiobutton(format_frame, text="MP3 (Аудио)", variable=self.format_var, value="mp3").pack(side=tk.LEFT, padx=(20, 0))
 
-        # Выбор директории сохранения
         ttk.Label(main_frame, text="Сохранить в:").grid(row=3, column=0, sticky=tk.W, pady=5)
         directory_frame = ttk.Frame(main_frame)
         directory_frame.grid(row=3, column=1, columnspan=2, sticky=(tk.W, tk.E), pady=5)
 
-        self.directory_entry = ttk.Entry(directory_frame, textvariable=self.directory_var, state="readonly")
+        self.directory_entry = ttk.Entry(directory_frame, textvariable=self.directory_var)
         self.directory_entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        # Bind focus out event to save directory when user finishes editing
+        self.directory_entry.bind("<FocusOut>", self.on_directory_change)
 
         self.browse_button = ttk.Button(directory_frame, text="Обзор...", command=self.browse_directory)
         self.browse_button.pack(side=tk.RIGHT, padx=(5, 0))
+        self.recent_dir_var = tk.StringVar()
+        self.recent_dir_combo = ttk.Combobox(directory_frame, textvariable=self.recent_dir_var, state="readonly", width=20)
+        self.recent_dir_combo.pack(side=tk.RIGHT, padx=(5, 0))
+        self.recent_dir_combo.bind("<<ComboboxSelected>>", self.on_recent_dir_selected)
+        recent_dirs = self.pref_manager.get_recent_directories()
+        self.recent_dir_combo['values'] = recent_dirs
 
-        # Прогресс бар
         ttk.Label(main_frame, text="Прогресс:").grid(row=4, column=0, sticky=tk.W, pady=(20, 5))
         self.progress_var = tk.DoubleVar()
         self.progress_bar = ttk.Progressbar(main_frame, variable=self.progress_var, maximum=100)
         self.progress_bar.grid(row=5, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
 
-        # Статус
         self.status_label = ttk.Label(main_frame, text="Готово к загрузке", relief=tk.SUNKEN, anchor=tk.W)
         self.status_label.grid(row=6, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=5)
 
-        # Кнопки управления
         button_frame = ttk.Frame(main_frame)
         button_frame.grid(row=7, column=0, columnspan=3, pady=20)
 
@@ -115,31 +169,28 @@ class MainWindow(tk.Tk):
         self.cancel_button = ttk.Button(button_frame, text="Отмена", command=self.cancel_download, state=tk.DISABLED)
         self.cancel_button.pack(side=tk.LEFT)
 
-        # Установка начальной директории
         home_dir = os.path.expanduser("~")
-        self.directory_var.set(home_dir)
-        self.directory_entry.config(state="normal")
-        self.directory_entry.delete(0, tk.END)
-        self.directory_entry.insert(0, home_dir)
-        self.directory_entry.config(state="readonly")
+        # Load last used directory from preferences
+        last_dir = self.pref_manager.get("last_directory", os.path.expanduser("~"))
+        self.directory_var.set(last_dir)
+
+        recent_dirs = self.pref_manager.get_recent_directories()
+        if hasattr(self, 'recent_dir_combo'):
+            self.recent_dir_combo['values'] = recent_dirs
 
     def browse_directory(self):
-        """
-        Открытие диалога выбора директории
-        """
         directory = filedialog.askdirectory(title="Выберите директорию для сохранения")
         if directory:
             self.directory_var.set(directory)
-            # Обновляем отображение
-            self.directory_entry.config(state="normal")
-            self.directory_entry.delete(0, tk.END)
-            self.directory_entry.insert(0, directory)
-            self.directory_entry.config(state="readonly")
+            # Save preference and update recent history
+            self.pref_manager.set("last_directory", directory)
+            self.pref_manager.add_recent_directory(directory)
+            # Update recent directories combo
+            recent_dirs = self.pref_manager.get_recent_directories()
+            if hasattr(self, 'recent_dir_combo'):
+                self.recent_dir_combo['values'] = recent_dirs
 
     def start_download(self):
-        """
-        Запуск процесса загрузки
-        """
         url = self.url_var.get().strip()
         format_type = self.format_var.get()
         save_dir = self.directory_var.get()
@@ -149,52 +200,56 @@ class MainWindow(tk.Tk):
             return
 
         if not save_dir or save_dir == ".":
-            # Если директория не выбрана, используем текущую
             save_dir = "."
 
-        # Блокируем кнопки во время загрузки
         self.download_button.config(state=tk.DISABLED)
         self.cancel_button.config(state=tk.NORMAL)
         self.url_entry.config(state=tk.DISABLED)
         self.browse_button.config(state=tk.DISABLED)
 
-        # Запуск загрузки через контроллер
         success = self.controller.handle_download_request(url, format_type, save_dir)
 
         if not success:
-            # Разблокируем кнопки если загрузка не началась
             self.download_button.config(state=tk.NORMAL)
             self.cancel_button.config(state=tk.DISABLED)
             self.url_entry.config(state=tk.NORMAL)
             self.browse_button.config(state=tk.NORMAL)
 
     def cancel_download(self):
-        """
-        Отмена процесса загрузки
-        """
         self.controller.handle_cancel_request()
         self.reset_ui_state()
 
-    def reset_ui_state(self):
-        """
-        Сброс состояния интерфейса
-        """
-        self.download_button.config(state=tk.NORMAL)
-        self.cancel_button.config(state=tk.DISABLED)
-        self.url_entry.config(state=tk.NORMAL)
-        self.browse_button.config(state=tk.NORMAL)
+    def on_recent_dir_selected(self, event):
+        selected = self.recent_dir_var.get()
+        if selected:
+            self.directory_var.set(selected)
+            # Save preference and update recent history
+            self.pref_manager.set("last_directory", selected)
+            self.pref_manager.add_recent_directory(selected)
+            # Update recent directories combo
+            recent_dirs = self.pref_manager.get_recent_directories()
+            if hasattr(self, 'recent_dir_combo'):
+                self.recent_dir_combo['values'] = recent_dirs
+
+    def on_directory_change(self, event):
+        directory = self.directory_var.get()
+        if directory:
+            # Validate that directory exists
+            if os.path.exists(directory) and os.path.isdir(directory):
+                # Save preference and update recent history
+                self.pref_manager.set("last_directory", directory)
+                self.pref_manager.add_recent_directory(directory)
+                # Update recent directories combo
+                recent_dirs = self.pref_manager.get_recent_directories()
+                if hasattr(self, 'recent_dir_combo'):
+                    self.recent_dir_combo['values'] = recent_dirs
+            else:
+                # Show warning if directory doesn't exist
+                self.show_warning("Указанная директория не существует")
 
     def update_progress(self, model: 'DownloadModel'):
-        """
-        Обновление прогресса загрузки в интерфейсе
-
-        Args:
-            model (DownloadModel): Модель данных загрузки
-        """
-        # Обновление прогресс бара
         self.progress_var.set(model.progress)
 
-        # Обновление статуса
         status_text = model.get_status_display()
         if model.status == "downloading":
             if model.speed and model.eta:
@@ -209,42 +264,21 @@ class MainWindow(tk.Tk):
 
         self.status_label.config(text=status_text)
 
-        # Обновление интерфейса
         self.update_idletasks()
 
-        # Если загрузка завершена или произошла ошибка, разблокируем кнопки
         if model.status in ["completed", "failed"]:
             self.reset_ui_state()
 
-            # Показываем сообщение об успехе или ошибке
             if model.status == "completed":
                 self.show_success(f"Загрузка завершена успешно!\nФайл: {model.filename}")
             elif model.status == "failed":
                 self.show_error(f"Ошибка загрузки: {model.filename}")
 
     def show_error(self, message: str):
-        """
-        Отображение сообщения об ошибке
-
-        Args:
-            message (str): Текст сообщения об ошибке
-        """
         messagebox.showerror("Ошибка", message)
 
     def show_success(self, message: str):
-        """
-        Отображение сообщения об успехе
-
-        Args:
-            message (str): Текст сообщения об успехе
-        """
         messagebox.showinfo("Успех", message)
 
     def show_warning(self, message: str):
-        """
-        Отображение предупреждения
-
-        Args:
-            message (str): Текст предупреждения
-        """
         messagebox.showwarning("Предупреждение", message)

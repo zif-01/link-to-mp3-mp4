@@ -1,59 +1,46 @@
 """
-Модель данных для загрузки медиафайлов
+Модель данных для задач загрузки медиафайлов.
 """
+
+__all__ = ['DownloadModel']
 
 
 class DownloadModel:
-    """
-    Модель данных для хранения информации о загрузке
-    """
+    """Модель данных для одной задачи загрузки."""
 
-    def __init__(self, url: str, format_type: str, save_directory: str):
+    def __init__(
+        self, url: str, format_type: str, save_directory: str
+    ) -> None:
         """
-        Инициализация модели данных загрузки
+        Инициализация модели загрузки.
 
         Args:
-            url (str): URL для скачивания
-            format_type (str): Тип формата ('mp3' или 'mp4')
-            save_directory (str): Директория для сохранения файла
+            url: Ссылка на медиафайл
+            format_type: 'mp3' или 'mp4'
+            save_directory: Путь для сохранения файла
         """
         self.url = url
-        self.format_type = format_type  # 'mp3' или 'mp4'
+        self.format_type = format_type
         self.save_directory = save_directory
-        self.status = "pending"  # pending, downloading, completed, failed
-        self.progress = 0  # 0-100
-        self.filename = ""
-        self.filesize = 0
-        self.speed = ""
-        self.eta = ""
+        self.status: str = "pending"
+        self.progress: int = 0
+        self.filename: str = ""
+        self.filesize: int = 0
+        self.speed: str = ""
+        self.eta: str = ""
 
-    def update_progress(self, progress: int):
-        """
-        Обновление прогресса загрузки
-
-        Args:
-            progress (int): Процент выполнения (0-100)
-        """
+    def update_progress(self, progress: int) -> None:
+        """Обновление прогресса загрузки."""
         self.progress = max(0, min(100, progress))
 
-    def update_status(self, status: str):
-        """
-        Обновление статуса загрузки
-
-        Args:
-            status (str): Новый статус загрузки
-        """
+    def update_status(self, status: str) -> None:
+        """Установление статуса загрузки."""
         valid_statuses = ["pending", "downloading", "completed", "failed"]
         if status in valid_statuses:
             self.status = status
 
     def get_status_display(self) -> str:
-        """
-        Получение отображаемого текста статуса
-
-        Returns:
-            str: Текстовое описание статуса
-        """
+        """Возвращает отображаемый текст статуса."""
         status_texts = {
             "pending": "Ожидание",
             "downloading": "Загрузка",

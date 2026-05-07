@@ -1,49 +1,48 @@
 """
-Контроллер приложения для управления взаимодействием между моделью и представлением
+Контроллер приложения — связующее между видом и моделью.
 """
-import os
-import urllib.parse
+
+__all__ = ['AppController']
+
 from typing import Optional, Callable
+import os
 from ..model.download_model import DownloadModel
 from ..model.download_manager import DownloadManager
 
 
 class AppController:
-    """
-    Контроллер основного приложения
-    """
+    """Управляет состоянием и взаимодействием между компонентами."""
 
-    def __init__(self, view=None):
+    def __init__(self, view: Optional['MainWindow'] = None) -> None:
         """
-        Инициализация контроллера
+        Инициализация контроллера.
 
         Args:
-            view: Объект представления (GUI)
+            view: Ссылка на главное окно для обратных вызовов
         """
-        self.view = view
-        self.download_manager = DownloadManager()
+        self.view: Optional[MainWindow] = view
+        self.download_manager: DownloadManager = DownloadManager()
         self.current_model: Optional[DownloadModel] = None
 
-    def handle_download_request(self, url: str, format_type: str, save_dir: str) -> bool:
+    def handle_download_request(
+        self, url: str, format_type: str, save_dir: str
+    ) -> bool:
         """
-        Обработка запроса на загрузку
+        Обрабатывает запрос на загрузку.
 
         Args:
-            url (str): URL для скачивания
-            format_type (str): Тип формата ('mp3' или 'mp4')
-            save_dir (str): Директория для сохранения
+            url: URL медиафайла
+            format_type: 'mp3' или 'mp4'
+            save_dir: Директория для сохранения
 
         Returns:
-            bool: True если запрос принят, False если есть ошибки
+            True если загрузка началась, False если валидация провалилась
         """
-        # Валидация входных данных
         if not self.validate_inputs(url, save_dir):
             return False
 
-        # Создание модели данных
         self.current_model = DownloadModel(url, format_type, save_dir)
 
-        # Запуск загрузки
         self.download_manager.download_media(
             self.current_model,
             self._progress_callback
@@ -51,10 +50,8 @@ class AppController:
 
         return True
 
-    def handle_cancel_request(self):
-        """
-        Обработка запроса на отмену загрузки
-        """
+    def handle_cancel_request(self) -> None:
+        """Отменяет текущую загрузку."""
         self.download_manager.cancel_download()
         if self.current_model:
             self.current_model.update_status("failed")
@@ -62,23 +59,28 @@ class AppController:
 
     def validate_inputs(self, url: str, save_dir: str) -> bool:
         """
-        Валидация входных данных
+        Валидация входных данных.
 
         Args:
-            url (str): URL для проверки
-            save_dir (str): Директория для проверки
+            url: URL для проверки
+            save_dir: Путь для сохранения
 
         Returns:
-            bool: True если данные валидны
+            True если все данные валидны
         """
-        # Проверка URL
-        if not url or not isinstance(url, str) or len(url.strip()) == 0:
+        if (
+            not url
+            or not isinstance(url, str)
+            or len(url.strip()) == 0
+        ):
             if self.view:
                 self.view.show_error("Введите корректный URL")
             return False
 
-        # Проверка директории сохранения
-        if not save_dir or not isinstance(save_dir, str):
+        if (
+            not save_dir
+            or not isinstance(save_dir, str)
+        ):
             if self.view:
                 self.view.show_error("Выберите директорию для сохранения")
             return False
@@ -95,31 +97,26 @@ class AppController:
 
         return True
 
-    def _progress_callback(self, progress_data):
+    def _progress_callback(self, progress_data: dict) -> None:
         """
-        Обратный вызов для обновления прогресса
+        Обратный вызов при обновлении прогресса.
 
         Args:
-            progress_data: Данные о прогрессе загрузки
+            progress_data: Данные о прогрессе
         """
         if self.current_model and self.view:
             if isinstance(progress_data, dict):
-                # Обновление прогресса из менеджера загрузки
-                self.current_model.update_progress(int(progress_data.get('progress', 0)))
+                self.current_model.update_progress(
+                    int(progress_data.get('progress', 0))
+                )
                 self.current_model.speed = progress_data.get('speed', '')
                 self.current_model.eta = progress_data.get('eta', '')
             elif isinstance(progress_data, DownloadModel):
-                # Обновление статуса из менеджера загрузки
-                pass
+                pass  # Игнорируем старые формат обратного вызова
 
             # Обновление GUI
             self.view.update_progress(self.current_model)
 
     def get_current_model(self) -> Optional[DownloadModel]:
-        """
-        Получение текущей модели данных
-
-        Returns:
-            DownloadModel: Текущая модель или None
-        """
+        """Возвращает текущую модель загрузки."""
         return self.current_model
