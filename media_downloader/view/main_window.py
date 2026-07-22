@@ -109,6 +109,15 @@ class MainWindow(tk.Tk):
         x = (self.winfo_screenwidth() // 2) - (width // 2)
         y = (self.winfo_screenheight() // 2) - (height // 2)
         self.geometry(f'{width}x{height}+{x}+{y}')
+    def reset_ui_state(self):
+        """Сброс состояния интерфейса после завершения загрузки."""
+        self.download_button.config(state=tk.NORMAL)
+        self.cancel_button.config(state=tk.DISABLED)
+        self.url_entry.config(state=tk.NORMAL)
+        self.browse_button.config(state=tk.NORMAL)
+        self.progress_var.set(0)
+        self.status_label.config(text="Готово к загрузке")
+        self.update_idletasks()
 
     def create_widgets(self):
         self.pref_manager = PreferenceManager()

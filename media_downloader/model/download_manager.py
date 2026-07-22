@@ -5,6 +5,7 @@
 __all__ = ['DownloadManager']
 
 import os
+import yt_dlp # type: ignore
 import urllib.parse
 import threading
 from typing import Optional, Callable
