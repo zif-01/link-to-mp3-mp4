@@ -1,7 +1,3 @@
-"""
-Загрузчик медиафайлов — точка входа приложения.
-"""
-
 import sys
 import os
 
@@ -12,7 +8,6 @@ from tkinter import messagebox
 
 
 def main() -> None:
-    """Точка входа в приложение."""
     try:
         controller = AppController()
         app = MainWindow(controller)

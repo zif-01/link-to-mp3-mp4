@@ -1,11 +1,7 @@
-"""
-Менеджер загрузки медиафайлов с использованием yt-dlp.
-"""
-
 __all__ = ['DownloadManager']
 
 import os
-import yt_dlp # type: ignore
+import yt_dlp
 import urllib.parse
 import threading
 from typing import Optional, Callable
@@ -13,30 +9,23 @@ from ..model.download_model import DownloadModel
 
 
 class DownloadManager:
-    """Отвечает за процессы загрузки и отмены."""
 
     def __init__(self) -> None:
-        """Инициализация менеджера."""
         self.ydl_opts: dict = {}
         self.current_download_thread: Optional[threading.Thread] = None
         self.is_cancelled: bool = False
+        self.proxy_url: Optional[str] = None
 
     def configure_download(self, model: DownloadModel) -> dict:
-        """
-        Конфигурация опций для yt-dlp.
-
-        Args:
-            model: Модель с данными о загрузке
-
-        Returns:
-            Словарь опций yt-dlp
-        """
         ydl_opts: dict = {
             'outtmpl': os.path.join(
                 model.save_directory, '%(title)s.%(ext)s'),
             'progress_hooks': [self._progress_hook],
             'logger': self._Logger(),
         }
+
+        if self.proxy_url:
+            ydl_opts['proxy'] = self.proxy_url
 
         if model.format_type == 'mp3':
             ydl_opts.update({
@@ -47,7 +36,7 @@ class DownloadManager:
                     'preferredquality': '192',
                 }]
             })
-        else:  # mp4
+        else:
             ydl_opts.update({
                 'format': 'best[ext=mp4]/best'
             })
@@ -59,16 +48,6 @@ class DownloadManager:
         model: DownloadModel,
         progress_callback: Optional[Callable] = None
     ) -> bool:
-        """
-        Запускает загрузку медиафайла.
-
-        Args:
-            model: Модель с данными о загрузке
-            progress_callback: Обратный вызов для обновления прогресса
-
-        Returns:
-            True если загрузка началась
-        """
         self.is_cancelled = False
         model.update_status("downloading")
 
@@ -105,18 +84,11 @@ class DownloadManager:
         return True
 
     def cancel_download(self) -> None:
-        """Отменяет текущую загрузку."""
         self.is_cancelled = True
         if self.current_download_thread and self.current_download_thread.is_alive():
             self.current_download_thread.join()
 
     def _progress_hook(self, data: dict) -> None:
-        """
-        Обратный вызов для обновления прогресса.
-
-        Args:
-            data: Данные о прогрессе
-        """
         if self.is_cancelled:
             raise yt_dlp.DownloadCancelled("Download was cancelled")
 
@@ -140,7 +112,6 @@ class DownloadManager:
                 self._progress_callback(progress_data)
 
     class _Logger:
-        """Молчаливый логгер для yt-dlp."""
 
         def debug(self, msg: str) -> None:
             pass
